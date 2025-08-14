@@ -1,39 +1,50 @@
-# utils/firebase_auth.py
-import base64
-import json
-import pyrebase
+# utils/firebase_auth.py (lazy init)
+import base64, json
+from typing import Optional
 from decouple import config
 
-# Leer API key desde las variables de entorno
-api_key = config("FIREBASE_API_KEY", default=None)
-if not api_key:
-    raise RuntimeError("Falta la variable FIREBASE_API_KEY")
+_project_id: Optional[str] = None
+_auth = None
 
-# Leer credenciales en base64 y decodificar
-b64 = config("FIREBASE_CREDENTIALS_BASE64", default=None)
-if not b64:
-    raise RuntimeError("Falta la variable FIREBASE_CREDENTIALS_BASE64")
+def _load_config():
+    global _project_id
+    if _project_id is not None:
+        return _project_id
 
-try:
-    raw_json = base64.b64decode(b64).decode("utf-8")
-    service_account_info = json.loads(raw_json)
-except Exception as e:
-    raise RuntimeError(f"Credenciales Base64 inválidas: {e}")
+    api_key = config("FIREBASE_API_KEY", default=None)
+    if not api_key:
+        raise RuntimeError("FIREBASE_API_KEY no configurado")
 
-# Usar el mismo projectId que el Admin SDK
-project_id = service_account_info["project_id"]
-PROJECT_ID = project_id  # 👈 export para diagnóstico si quieres
+    b64 = config("FIREBASE_CREDENTIALS_BASE64", default=None)
+    if not b64:
+        raise RuntimeError("FIREBASE_CREDENTIALS_BASE64 no configurado")
 
-firebase_config = {
-    "apiKey": api_key,
-    "authDomain": f"{project_id}.firebaseapp.com",
-    "databaseURL": f"https://{project_id}.firebaseio.com",
-    "projectId": project_id,
-    "storageBucket": f"{project_id}.appspot.com",
-    "messagingSenderId": service_account_info.get("client_id", ""),
-    "appId": "",  # opcional
-}
+    raw = base64.b64decode(b64).decode("utf-8")
+    data = json.loads(raw)
+    _project_id = data["project_id"]
+    return _project_id
 
-# Inicializar Pyrebase
-firebase = pyrebase.initialize_app(firebase_config)
-auth = firebase.auth()
+def get_client_auth():
+    global _auth
+    if _auth is not None:
+        return _auth
+    pid = _load_config()
+    api_key = config("FIREBASE_API_KEY")
+
+    import pyrebase  # imported lazily
+    firebase_config = {
+        "apiKey": api_key,
+        "authDomain": f"{pid}.firebaseapp.com",
+        "databaseURL": f"https://{pid}.firebaseio.com",
+        "projectId": pid,
+        "storageBucket": f"{pid}.appspot.com",
+    }
+    firebase = pyrebase.initialize_app(firebase_config)
+    _auth = firebase.auth()
+    return _auth
+
+def get_project_id_safe() -> str:
+    try:
+        return _load_config()
+    except Exception:
+        return "UNKNOWN"

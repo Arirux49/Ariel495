@@ -22,6 +22,55 @@ def _rand_file() -> str:
 
 
 class SampleController:
+
+    @staticmethod
+    def list_comments(sample_id: str) -> List[Dict[str, Any]]:
+        try:
+            sid = ObjectId(sample_id)
+        except Exception:
+            raise HTTPException(400, "sample_id inválido")
+        out = []
+        for c in comments_collection.find({"target_type": "sample", "target_id": sid}).sort("fecha", 1):
+            c["_id"] = str(c["_id"])
+            c["target_id"] = str(c["target_id"])
+            if c.get("user_id"):
+                c["user_id"] = str(c["user_id"])
+            out.append(c)
+        return out
+
+    @staticmethod
+    def add_comment(sample_id: str, texto: str, user_id: str) -> Dict[str, Any]:
+        if not texto or not texto.strip():
+            raise HTTPException(422, "texto es requerido")
+        try:
+            sid = ObjectId(sample_id)
+        except Exception:
+            raise HTTPException(400, "sample_id inválido")
+        if not samples_collection.find_one({"_id": sid}):
+            raise HTTPException(404, "Sample no encontrado")
+        doc = {
+            "texto": texto.strip(),
+            "user_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else None,
+            "target_type": "sample",
+            "target_id": sid,
+            "fecha": datetime.utcnow(),
+        }
+        res = comments_collection.insert_one(doc)
+        doc["_id"] = str(res.inserted_id)
+        doc["target_id"] = str(sid)
+        if doc["user_id"]:
+            doc["user_id"] = str(doc["user_id"])
+        return doc
+
+    @staticmethod
+    def delete_comment(sample_id: str, comentario_id: str) -> None:
+        try:
+            cid = ObjectId(comentario_id)
+        except Exception:
+            raise HTTPException(400, "comentario_id inválido")
+        res = comments_collection.delete_one({"_id": cid, "target_type": "sample"})
+        if res.deleted_count == 0:
+            raise HTTPException(404, "Comentario no encontrado")
     @staticmethod
     def _to_response(doc: Dict[str, Any]) -> Dict[str, Any]:
         if not doc:
@@ -136,3 +185,9 @@ class SampleController:
             inserted += 1
 
         return {"instrumentos_agregados": inserted, "ya_existian": ya_existian}
+
+from typing import Any, Dict, List
+from fastapi import HTTPException
+from bson import ObjectId
+from datetime import datetime
+from utils.db import comments_collection, samples_collection
