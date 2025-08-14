@@ -4,30 +4,32 @@ from routes.api import api_router
 from utils.db import ping_db
 from utils.seed import seed_instruments
 
-# CORS
 from fastapi.middleware.cors import CORSMiddleware
 from decouple import config
 
 app = FastAPI(title="Social Music API - Full")
 
-# ✅ CORS: listas explícitas (NO usar "*" si allow_credentials=True)
-#    Puedes agregar orígenes extra con FRONTEND_ORIGINS="https://mi-frontend.com,https://otro.com"
-_default_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+# Permite cualquier puerto en localhost / 127.0.0.1 en desarrollo.
+# (Evita errores si Vite cambia de puerto o usas 127.0.0.1 vs localhost)
+DEV_ORIGIN_REGEX = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+
+# Orígenes adicionales opcionales (producción), coma-separados en env:
+# FRONTEND_ORIGINS="https://mi-frontend.com,https://otro.com"
+extra_origins = [
+    o.strip() for o in config("FRONTEND_ORIGINS", default="").split(",") if o.strip()
 ]
-_extra = [o.strip() for o in config("FRONTEND_ORIGINS", default="").split(",") if o.strip()]
-ALLOWED_ORIGINS = _default_origins + _extra
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    # Usamos regex para dev y además la lista explícita por si agregas dominios
+    allow_origin_regex=DEV_ORIGIN_REGEX,
+    allow_origins=extra_origins,          # ← aquí puedes poner tu dominio de FE si lo tienes
+    allow_credentials=True,               # ok porque NO usamos "*" como origen
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],  # Authorization, Content-Type, etc.
+    allow_headers=["*"],                  # Authorization, Content-Type, etc.
+    expose_headers=["*"],                 # opcional: por si necesitas leer headers
 )
 
-# Routers
 app.include_router(api_router)
 
 @app.on_event("startup")
