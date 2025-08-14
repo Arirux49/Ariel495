@@ -1,4 +1,4 @@
-
+# routes/samples.py
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from controllers.sample_controller import SampleController
@@ -33,4 +33,18 @@ async def eliminar_sample(sample_id: str, user: dict = Depends(get_current_user)
 
 @router.post("/{sample_id}/instrumentos")
 async def agregar_instrumentos_sample(sample_id: str, body: dict, user: dict = Depends(get_current_user)):
-    return SampleController.add_instruments(sample_id, body.get("instrumento_ids", []))
+    # acepta "instrumento_ids" o "instruments" desde la UI
+    ids = body.get("instrumento_ids") or body.get("instruments") or []
+    return SampleController.add_instruments(sample_id, ids)
+
+# -------- Comentarios sobre Samples --------
+@router.get("/{sample_id}/comentarios")
+async def listar_comentarios_sample(sample_id: str):
+    return SampleController.list_comments(sample_id)
+
+@router.post("/{sample_id}/comentarios")
+async def crear_comentario_sample(sample_id: str, body: dict, user: dict = Depends(get_current_user)):
+    texto = (body.get("texto") or "").strip()
+    if not texto:
+        raise HTTPException(400, "El texto del comentario es requerido")
+    return SampleController.add_comment(sample_id, texto, user["sub"])
