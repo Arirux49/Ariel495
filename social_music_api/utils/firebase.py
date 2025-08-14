@@ -21,7 +21,6 @@ def init_firebase():
 
     b64 = None
     try:
-        
         b64 = config("FIREBASE_CREDENTIALS_BASE64", default=None)
     except Exception:
         b64 = None
@@ -30,7 +29,7 @@ def init_firebase():
     if b64:
         try:
             raw = base64.b64decode(b64).decode("utf-8")
-            data = json.loads(raw)  
+            data = json.loads(raw)
             cred = credentials.Certificate(data)
         except Exception as e:
             raise RuntimeError(f"FIREBASE_CREDENTIALS_BASE64 inválido: {e}")
@@ -47,7 +46,6 @@ def init_firebase():
 
 
 def firebase_login(email: str, password: str) -> dict:
-
     api_key = config("FIREBASE_API_KEY")
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
     resp = requests.post(
@@ -62,3 +60,17 @@ def firebase_login(email: str, password: str) -> dict:
             err = "Credenciales inválidas"
         raise ValueError(err)
     return resp.json()
+
+
+def get_admin_project_id() -> str:
+    """Devuelve el projectId que está usando el Admin SDK, para diagnóstico."""
+    try:
+        app = firebase_admin.get_app()
+        # firebase_admin 6.x expone project_id
+        pid = getattr(app, "project_id", None)
+        if pid:
+            return pid
+        # fallback
+        return app.options.get("projectId") or "UNKNOWN"
+    except Exception:
+        return "UNKNOWN"

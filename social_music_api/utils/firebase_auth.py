@@ -22,6 +22,7 @@ except Exception as e:
 
 # Usar el mismo projectId que el Admin SDK
 project_id = service_account_info["project_id"]
+PROJECT_ID = project_id  # 👈 export para diagnóstico si quieres
 
 firebase_config = {
     "apiKey": api_key,
