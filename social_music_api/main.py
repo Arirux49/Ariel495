@@ -4,20 +4,20 @@ from routes.api import api_router
 from utils.db import ping_db
 from utils.seed import seed_instruments
 
+# ⬇️ NUEVO
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Social Music API - Full")
+app.include_router(api_router)
 
+# ⬇️ NUEVO: permite peticiones desde tu UI (Vite)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",   # acepta cualquier origen
-    allow_origins=["*"],       # redundante pero ok
-    allow_credentials=False,   # <— clave si usas "*"
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"], 
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.include_router(api_router)
 
 @app.on_event("startup")
 def startup():
