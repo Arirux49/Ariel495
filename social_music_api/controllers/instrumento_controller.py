@@ -1,78 +1,51 @@
-
-from fastapi import HTTPException, status
-from typing import List, Dict, Any, Optional
+from fastapi import HTTPException
+from typing import List, Optional
+from utils.ids import parse_object_id
+from utils.db import get_db
 from bson import ObjectId
-from utils.db import instruments_collection, sample_instruments
 
-class InstrumentoController:
-    @staticmethod
-    def _to_response(doc: Dict[str, Any]) -> Dict[str, Any]:
-        if not doc: return None
-        doc["_id"] = str(doc["_id"])
-        return doc
+def _collection():
+    return get_db()['instrumentos']
 
-    @staticmethod
-    def create_instrumento(data: Dict[str, Any]) -> Dict[str, Any]:
-        nombre = (data.get("nombre") or "").strip()
-        if not nombre:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "El campo 'nombre' es obligatorio")
-        instrumento = {"nombre": nombre, "descripcion": data.get("descripcion")}
-        res = instruments_collection.insert_one(instrumento)
-        instrumento["_id"] = str(res.inserted_id)
-        return instrumento
+def _samples():
+    return get_db()['samples']
 
-    @staticmethod
-    def get_all_instrumentos() -> List[Dict[str, Any]]:
-        return [InstrumentoController._to_response(d) for d in instruments_collection.find({})]
+async def list_instrumentos(q: Optional[str] = None) -> List[dict]:
+    col = _collection()
+    filtro = {}
+    if q:
+        filtro = {"$or": [{"nombre": {"$regex": q, "$options": "i"}}, {"descripcion": {"$regex": q, "$options": "i"}}]}
+    return [ {**it, "_id": str(it["_id"])} for it in await col.find(filtro).to_list(length=1000) ]
 
-    @staticmethod
-    def get_instrumento(instrumento_id: str) -> Optional[Dict[str, Any]]:
-        try:
-            doc = instruments_collection.find_one({"_id": ObjectId(instrumento_id)})
-            return InstrumentoController._to_response(doc)
-        except Exception:
-            raise HTTPException(400, "ID inválido")
+async def create_instrumento(payload: dict) -> dict:
+    nombre = (payload or {}).get("nombre")
+    if not nombre:
+        raise HTTPException(status_code=400, detail="nombre es requerido")
+    doc = {"nombre": nombre, "descripcion": (payload or {}).get("descripcion", "")}
+    res = await _collection().insert_one(doc)
+    doc["_id"] = str(res.inserted_id)
+    return doc
 
-    @staticmethod
-    def update_instrumento(instrumento_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            upd = {}
-            if "nombre" in data:
-                if not data["nombre"]:
-                    raise HTTPException(400, "nombre no puede ser vacío")
-                upd["nombre"] = data["nombre"]
-            if "descripcion" in data:
-                upd["descripcion"] = data["descripcion"]
-            if not upd:
-                raise HTTPException(400, "Nada que actualizar")
-            res = instruments_collection.find_one_and_update(
-                {"_id": ObjectId(instrumento_id)},
-                {"$set": upd},
-                return_document=True
-            )
-            if not res:
-                raise HTTPException(404, "Instrumento no encontrado")
-            res["_id"] = str(res["_id"])
-            return res
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(400, "ID inválido")
+async def update_instrumento(instr_id: str, payload: dict) -> dict:
+    oid = parse_object_id(instr_id)
+    if not oid:
+        raise HTTPException(status_code=400, detail="id inválido")
+    await _collection().update_one({"_id": oid}, {"$set": payload or {}})
+    doc = await _collection().find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="no encontrado")
+    doc["_id"] = str(doc["_id"])
+    return doc
 
-    @staticmethod
-    def delete_instrumento(instrumento_id: str) -> None:
-        try:
-            oid = ObjectId(instrumento_id)
-        except Exception:
-            raise HTTPException(400, "ID inválido")
-        ref = sample_instruments.find_one({"instrumento_id": oid})
-        if ref:
-            raise HTTPException(409, "No se puede eliminar: instrumento referenciado en samples")
-        res = instruments_collection.delete_one({"_id": oid})
-        if res.deleted_count == 0:
-            raise HTTPException(404, "Instrumento no encontrado")
-
-    @staticmethod
-    def search_instrumentos(query: Optional[str]) -> List[Dict[str, Any]]:
-        filtro = {"nombre": {"$regex": query, "$options": "i"}} if query else {}
-        return [InstrumentoController._to_response(d) for d in instruments_collection.find(filtro)]
+async def delete_instrumento(instr_id: str) -> dict:
+    oid = parse_object_id(instr_id)
+    if not oid:
+        raise HTTPException(status_code=400, detail="id inválido")
+    # eliminación segura: verificar referencia en samples
+    ref = await _samples().find_one({"instrumento_ids": oid})
+    if ref:
+        raise HTTPException(status_code=409, detail="No se puede eliminar: el instrumento está en uso por samples.")
+    res = await _collection().delete_one({"_id": oid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="no encontrado")
+    return {"deleted": True}
