@@ -110,8 +110,9 @@ class AuthController:
 
     @staticmethod
     async def login_user(credentials: dict) -> dict:
-        """Login vía REST (signInWithPassword) usando FIREBASE_API_KEY.
-        Evita desalineaciones con el Admin SDK / service account.
+        """
+        Login vía REST Identity Toolkit (signInWithPassword) usando FIREBASE_API_KEY.
+        Devolvemos mensajes claros del error de Firebase.
         """
         import requests
         from decouple import config
@@ -120,26 +121,20 @@ class AuthController:
             if not api_key:
                 raise HTTPException(500, "Falta FIREBASE_API_KEY")
             url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
-            payload = {
-                "email": credentials["email"],
-                "password": credentials["password"],
-                "returnSecureToken": True,
-            }
+            payload = {"email": credentials["email"], "password": credentials["password"], "returnSecureToken": True}
             resp = requests.post(url, json=payload, timeout=15)
             if resp.status_code != 200:
                 try:
                     err = resp.json().get("error", {}).get("message", "")
                 except Exception:
                     err = ""
+                # Errores comunes
                 if err in {"EMAIL_NOT_FOUND", "INVALID_PASSWORD"}:
                     raise HTTPException(401, "Correo o contraseña incorrectos")
-                raise HTTPException(401, f"Error en autenticación: {err or 'desconocido'}")
-
+                # Propagamos status de Firebase para facilitar debug
+                raise HTTPException(resp.status_code, f"Firebase error: {err or 'desconocido'}")
             data = resp.json()
             uid = data.get("localId")
-            if not uid:
-                raise HTTPException(401, "Respuesta inválida de Firebase")
-
             token = create_access_token({"sub": uid, "email": credentials["email"], "uid": uid})
             return {"access_token": token, "token_type": "bearer", "uid": uid}
         except HTTPException:
