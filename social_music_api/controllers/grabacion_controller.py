@@ -1,36 +1,66 @@
-
-from fastapi import HTTPException
-from typing import Dict, Any, List
 from bson import ObjectId
-from utils.db import recordings_collection, recording_samples, samples_collection
+from utils.mongodb import get_collection
+from fastapi import HTTPException, status
+import traceback
 
-class GrabacionController:
-    @staticmethod
-    def crear(data: Dict[str, Any], usuario_id: str) -> Dict[str, Any]:
-        if not data.get("nombre"):
-            raise HTTPException(400, "nombre es requerido")
+def _to_dict(doc):
+    if not doc:
+        return None
+    d = dict(doc)
+    d["id"] = str(d.pop("_id"))
+    return d
+
+async def create_grabacion(payload: dict) -> dict:
+    try:
+        coll = get_collection("grabaciones")
         doc = {
-            "nombre": data["nombre"],
-            "descripcion": data.get("descripcion"),
-            "usuario_creador": ObjectId(usuario_id),
-            "archivo": data.get("archivo"),
-            "duracion": data.get("duracion")
+            "titulo": payload.get("titulo", "Sin título"),
+            "descripcion": payload.get("descripcion", ""),
+            "sample_ids": [ObjectId(x) for x in payload.get("sample_ids", [])],
         }
-        res = recordings_collection.insert_one(doc)
-        doc["_id"] = str(res.inserted_id)
-        doc["usuario_creador"] = str(doc["usuario_creador"])
-        return doc
+        res = await coll.insert_one(doc)
+        created = await coll.find_one({"_id": res.inserted_id})
+        return _to_dict(created)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Error al crear grabación")
 
-    @staticmethod
-    def agregar_samples(grabacion_id: str, sample_ids: List[str]) -> Dict[str, int]:
-        gid = ObjectId(grabacion_id)
-        if not recordings_collection.find_one({"_id": gid}):
-            raise HTTPException(404, "grabación no existe")
-        inserted = 0
-        for sid in sample_ids:
-            oid = ObjectId(sid)
-            if not samples_collection.find_one({"_id": oid}):
-                continue
-            recording_samples.insert_one({"grabacion_id": gid, "sample_id": oid})
-            inserted += 1
-        return {"samples_agregados": inserted}
+async def add_samples_to_grabacion(grabacion_id: str, sample_ids: list) -> dict:
+    try:
+        coll = get_collection("grabaciones")
+        ids = [ObjectId(x) for x in sample_ids]
+        await coll.update_one({"_id": ObjectId(grabacion_id)}, {"$addToSet": {"sample_ids": {"$each": ids}}})
+        updated = await coll.find_one({"_id": ObjectId(grabacion_id)})
+        return _to_dict(updated)
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Error al agregar samples")
+
+async def list_grabaciones() -> list:
+    try:
+        coll = get_collection("grabaciones")
+        cursor = coll.find({}).sort("_id", -1)
+        out = []
+        async for d in cursor:
+            out.append(_to_dict(d))
+        return out
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Error al listar grabaciones")
+
+async def get_grabacion(grabacion_id: str) -> dict | None:
+    coll = get_collection("grabaciones")
+    d = await coll.find_one({"_id": ObjectId(grabacion_id)})
+    return _to_dict(d) if d else None
+
+async def delete_grabacion(grabacion_id: str) -> None:
+    try:
+        coll = get_collection("grabaciones")
+        res = await coll.delete_one({"_id": ObjectId(grabacion_id)})
+        if res.deleted_count == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grabación no encontrada")
+    except HTTPException:
+        raise
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Error al eliminar grabación")
