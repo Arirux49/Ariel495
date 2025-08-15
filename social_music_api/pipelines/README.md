@@ -1,0 +1,1 @@
+- $lookup, $group/$avg, validación por pipeline expuestos en routes.
