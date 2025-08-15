@@ -1,42 +1,28 @@
-from fastapi import APIRouter, HTTPException, Path, Depends, status
-from typing import List, Any, Dict
-from controllers.grabacion_controller import (
-    create_grabacion as controller_create_grabacion,
-    add_samples_to_grabacion as controller_add_samples_to_grabacion,
-    list_grabaciones as controller_list_grabaciones,
-    get_grabacion as controller_get_grabacion,
-    delete_grabacion as controller_delete_grabacion,
-)
-from utils.auth_dependency import validate_user
+from fastapi import APIRouter, Body, Depends, HTTPException
+from typing import Dict, Any, List
+from controllers.grabacion_controller import GrabacionController
+from utils.security import get_current_user
 
 router = APIRouter(prefix="/grabaciones", tags=["Grabaciones"])
 
-@router.post("/", summary="Crear Grabacion")
-@validate_user
-async def create_grabacion(payload: Dict[str, Any]):
-    return await controller_create_grabacion(payload)
+@router.post("/")
+async def crear_grabacion(
+    body: Dict[str, Any] = Body(...),
+    _user=Depends(get_current_user)
+):
+    nombre = body.get("nombre") or body.get("titulo")
+    if not nombre or len(nombre) < 2:
+        raise HTTPException(422, "nombre/titulo es requerido y debe tener al menos 2 caracteres.")
+    data = {"nombre": nombre, "descripcion": body.get("descripcion", "")}
+    return GrabacionController.crear(data)
 
-@router.patch("/{grabacion_id}/samples", summary="Agregar Samples")
-@validate_user
-async def add_samples(grabacion_id: str, payload: Dict[str, Any]):
-    sample_ids = payload.get("sample_ids", [])
-    return await controller_add_samples_to_grabacion(grabacion_id, sample_ids)
-
-@router.get("/", summary="Listar Grabaciones")
-@validate_user
-async def list_grabaciones():
-    return await controller_list_grabaciones()
-
-@router.get("/{grabacion_id}", summary="Obtener Grabacion")
-@validate_user
-async def get_grabacion(grabacion_id: str):
-    result = await controller_get_grabacion(grabacion_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Grabación no encontrada")
-    return result
-
-@router.delete("/{grabacion_id}", summary="Eliminar Grabacion", status_code=status.HTTP_204_NO_CONTENT)
-@validate_user
-async def delete_grabacion(grabacion_id: str):
-    await controller_delete_grabacion(grabacion_id)
-    return None
+@router.patch("/{grabacion_id}/samples")
+async def agregar_samples(
+    grabacion_id: str,
+    body: Dict[str, Any] = Body(...),
+    _user=Depends(get_current_user)
+):
+    sample_ids: List[str] = body.get("sample_ids") or body.get("samples") or []
+    if not isinstance(sample_ids, list):
+        raise HTTPException(400, "sample_ids/samples debe ser una lista de IDs.")
+    return GrabacionController.agregar_samples(grabacion_id, sample_ids)
