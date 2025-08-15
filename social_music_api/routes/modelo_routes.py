@@ -3,12 +3,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
-from utils.mongodb import get_collection
+from utils.db import samples_collection, instruments_collection
 
 router = APIRouter(prefix="/modelo", tags=["Modelo principal"])
 
-sample_coll = get_collection("samples")
-inst_coll = get_collection("instruments")
+sample_coll = samples_collection
+inst_coll = instruments_collection
 
 class SampleIn(BaseModel):
     title: str = Field(..., min_length=2, max_length=80)
