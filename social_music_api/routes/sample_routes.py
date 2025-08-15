@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from typing import Dict, Any
 from controllers.sample_controller import (
     list_samples, create_sample, update_sample, delete_sample
 )
@@ -10,11 +11,11 @@ async def list_all():
     return await list_samples()
 
 @router.post("")
-async def create(payload: dict):
+async def create(payload: Dict[str, Any]):
     return await create_sample(payload)
 
 @router.put("/{sample_id}")
-async def update(sample_id: str, payload: dict):
+async def update(sample_id: str, payload: Dict[str, Any]):
     return await update_sample(sample_id, payload)
 
 @router.delete("/{sample_id}")

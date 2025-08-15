@@ -1,7 +1,9 @@
-from fastapi import HTTPException
-from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, Query
+from typing import Optional, List, Dict, Any
 from utils.db import get_db
 from utils.ids import parse_object_id
+
+router = APIRouter(prefix="/instrumentos", tags=["Instrumentos"])
 
 def _col():
     return get_db()["instrumentos"]
@@ -9,7 +11,8 @@ def _col():
 def _samples():
     return get_db()["samples"]
 
-async def list_instrumentos(q: Optional[str] = None) -> List[dict]:
+@router.get("")
+async def list_instrumentos(q: Optional[str] = Query(None)):
     filtro = {}
     if q:
         filtro = {"$or": [
@@ -21,7 +24,8 @@ async def list_instrumentos(q: Optional[str] = None) -> List[dict]:
         it["_id"] = str(it["_id"])
     return items
 
-async def create_instrumento(payload: Dict[str, Any]) -> dict:
+@router.post("")
+async def create_instrumento(payload: Dict[str, Any]):
     nombre = (payload or {}).get("nombre")
     if not nombre:
         raise HTTPException(status_code=400, detail="nombre es requerido")
@@ -30,7 +34,8 @@ async def create_instrumento(payload: Dict[str, Any]) -> dict:
     doc["_id"] = str(res.inserted_id)
     return doc
 
-async def update_instrumento(instrumento_id: str, payload: Dict[str, Any]) -> dict:
+@router.put("/{instrumento_id}")
+async def update_instrumento(instrumento_id: str, payload: Dict[str, Any]):
     oid = parse_object_id(instrumento_id)
     if not oid:
         raise HTTPException(status_code=400, detail="id inválido")
@@ -41,11 +46,11 @@ async def update_instrumento(instrumento_id: str, payload: Dict[str, Any]) -> di
     doc["_id"] = str(doc["_id"])
     return doc
 
-async def delete_instrumento(instrumento_id: str) -> dict:
+@router.delete("/{instrumento_id}")
+async def delete_instrumento(instrumento_id: str):
     oid = parse_object_id(instrumento_id)
     if not oid:
         raise HTTPException(status_code=400, detail="id inválido")
-    # eliminación segura: si está en use en samples, 409
     ref = await _samples().find_one({"instrumento_ids": oid})
     if ref:
         raise HTTPException(status_code=409, detail="No se puede eliminar: el instrumento está en uso por samples.")

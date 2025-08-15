@@ -1,26 +1,27 @@
+from motor.motor_asyncio import AsyncIOMotorClient
+from .settings import MONGODB_URI, DB_NAME
 
-from pymongo import MongoClient
-from decouple import config
+_client = None
+_db = None
 
-MONGODB_URI = config("MONGODB_URI")
-DB_NAME = config("DATABASE_NAME", default="social_music")
+def get_client():
+    global _client
+    if _client is None:
+        if not MONGODB_URI:
+            raise RuntimeError("MONGODB_URI no está definido en el .env")
+        _client = AsyncIOMotorClient(MONGODB_URI)
+    return _client
 
-client = MongoClient(MONGODB_URI)
-db = client[DB_NAME]
+def get_db():
+    global _db
+    if _db is None:
+        _db = get_client()[DB_NAME]
+    return _db
 
-users_collection = db["users"]
-instruments_collection = db["instruments"]
-samples_collection = db["samples"]
-recordings_collection = db["recordings"]
-comments_collection = db["comments"]
-
-user_instruments = db["user_instruments"]
-sample_instruments = db["sample_instruments"]
-recording_samples = db["recording_samples"]
-
-def ping_db() -> bool:
+async def ping_db() -> bool:
     try:
-        client.admin.command("ping")
+        await get_client().admin.command("ping")
         return True
-    except Exception:
+    except Exception as e:
+        print("Ping MongoDB falló:", e)
         return False
