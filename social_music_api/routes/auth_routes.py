@@ -22,3 +22,13 @@ async def users_alias(user: UserCreate):
 @alias_router.post("/login")
 async def login_alias(credentials: UserLogin):
     return await AuthController.login_user(credentials.dict())
+
+
+@router.get("/debug/firebase")
+async def debug_firebase():
+    from utils.firebase import get_admin_project_id
+    try:
+        from utils.firebase_auth import get_project_id_safe
+    except Exception:
+        def get_project_id_safe(): return None
+    return {"admin_project": get_admin_project_id(), "client_project": get_project_id_safe()}
