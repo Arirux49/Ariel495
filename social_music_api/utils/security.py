@@ -1,39 +1,42 @@
 # utils/security.py
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+import os
+import time
+import hmac
+import base64
+import json
+from hashlib import sha256
 
-from fastapi import HTTPException, Header
-from jose import jwt, JWTError
-from decouple import config
+# Simple JWT (HS256) helpers with graceful SECRET_KEY handling.
+# If SECRET_KEY is missing, we generate a TEMP key (process-local) and log a warning.
+# For production, always set SECRET_KEY in Railway Variables.
 
-ALGORITHM = "HS256"
+_SECRET_KEY = os.getenv("SECRET_KEY")
+if not _SECRET_KEY:
+    # 32 random bytes -> base64
+    _SECRET_KEY = base64.urlsafe_b64encode(os.urandom(32)).decode("utf-8").rstrip("=")
+    print("⚠️  SECRET_KEY no configurado. Se generó una clave temporal para esta ejecución.")
+ALGO = "HS256"
 
-def create_access_token(payload: Dict[str, Any], minutes: int = 60 * 24 * 7) -> str:
-    """
-    Genera un JWT con exp válido (por defecto 7 días) y HS256.
-    payload debe incluir al menos: { "sub": uid, "email": ..., "uid": ... }
-    """
-    secret = config("SECRET_KEY", default=None)
-    if not secret:
-        raise RuntimeError("SECRET_KEY no configurado")
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
-    to_encode = payload.copy()
-    expire = datetime.utcnow() + timedelta(minutes=minutes)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, secret, algorithm=ALGORITHM)
+def _b64url_json(obj) -> str:
+    return _b64url(json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
-def decode_token(token: str) -> Dict[str, Any]:
-    secret = config("SECRET_KEY", default=None)
-    if not secret:
-        raise RuntimeError("SECRET_KEY no configurado")
-    try:
-        return jwt.decode(token, secret, algorithms=[ALGORITHM])
-    except JWTError as e:
-        raise HTTPException(status_code=401, detail=f"Token inválido: {e}")
+def _sign(header_b64: str, payload_b64: str) -> str:
+    msg = f"{header_b64}.{payload_b64}".encode("utf-8")
+    sig = hmac.new(_SECRET_KEY.encode("utf-8"), msg, sha256).digest()
+    return _b64url(sig)
 
-# Dependencia simple para rutas protegidas (si la usas)
-def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="No autorizado")
-    token = authorization.split(" ", 1)[1]
-    return decode_token(token)
+def create_access_token(claims: dict, expires_minutes: int = 120) -> str:
+    now = int(time.time())
+    header = {"alg": ALGO, "typ": "JWT"}
+    payload = dict(claims or {})
+    payload.setdefault("iat", now)
+    payload.setdefault("exp", now + expires_minutes * 60)
+    if "sub" not in payload and "uid" in payload:
+        payload["sub"] = payload["uid"]
+    header_b64 = _b64url_json(header)
+    payload_b64 = _b64url_json(payload)
+    sig_b64 = _sign(header_b64, payload_b64)
+    return f"{header_b64}.{payload_b64}.{sig_b64}"
