@@ -1,34 +1,19 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import PublicRoute from "./components/PublicRoute";
-import ProtectedRoute from "./components/ProtectedRoute";
-
-// Pantallas
-import LoginScreen from "./components/LoginScreen";
-import SignupScreen from "./components/SignupScreen";
-import Dashboard from "./components/Dashboard";
-import UsersPage from "./components/UsersPage";
-import InstrumentsPage from "./components/InstrumentsPage";
-import RecordingsPage from "./components/RecordingsPage";
-import SamplesPage from "./components/SamplesPage";
-import SampleDetail from "./components/SampleDetail";
-
-// Nuevo layout oscuro para pantallas protegidas
-import AppLayout from "./components/AppLayout";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+// ...tus imports
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AuthProvider>
         <Routes>
-          {/* Públicas: se mantienen tal cual */}
+          {/* Públicas */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginScreen />} />
             <Route path="/signup" element={<SignupScreen />} />
           </Route>
 
-          {/* Protegidas: todas con AppLayout oscuro/verde */}
+          {/* Protegidas */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
@@ -40,6 +25,9 @@ export default function App() {
               <Route path="/samples/:id" element={<SampleDetail />} />
             </Route>
           </Route>
+
+          {/* Catch-all (opcional, ayuda si algo no matchea) */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
