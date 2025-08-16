@@ -1,10 +1,10 @@
-// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-// ...tus imports
+// ...resto de imports
 
 export default function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    // 👇 sin la barra final (esto a veces importa para el match)
+    <BrowserRouter basename="/Ariel495">
       <AuthProvider>
         <Routes>
           {/* Públicas */}
@@ -26,10 +26,11 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Catch-all (opcional, ayuda si algo no matchea) */}
+          {/* Catch-all por si algo no matchea */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
   );
 }
+
