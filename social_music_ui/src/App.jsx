@@ -1,19 +1,35 @@
+// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-// ...resto de imports
+import { AuthProvider } from "./context/AuthContext";
+import PublicRoute from "./components/PublicRoute";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// Pantallas
+import LoginScreen from "./components/LoginScreen";
+import SignupScreen from "./components/SignupScreen";
+import Dashboard from "./components/Dashboard";
+import UsersPage from "./components/UsersPage";
+import InstrumentsPage from "./components/InstrumentsPage";
+import RecordingsPage from "./components/RecordingsPage";
+import SamplesPage from "./components/SamplesPage";
+import SampleDetail from "./components/SampleDetail";
+
+// Layout para pantallas protegidas
+import AppLayout from "./components/AppLayout";
 
 export default function App() {
   return (
-    // 👇 sin la barra final (esto a veces importa para el match)
+    // 👇 importante: sin la barra final
     <BrowserRouter basename="/Ariel495">
       <AuthProvider>
         <Routes>
-          {/* Públicas */}
+          {/* Rutas públicas */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginScreen />} />
             <Route path="/signup" element={<SignupScreen />} />
           </Route>
 
-          {/* Protegidas */}
+          {/* Rutas protegidas */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
@@ -26,11 +42,10 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Catch-all por si algo no matchea */}
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
   );
 }
-
